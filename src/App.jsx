@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Loader2, CheckCircle, AlertCircle, X, Target, Copy, FolderOpen, Briefcase, Trash2, Upload, Phone, Mail } from 'lucide-react';
+
 
 const ERGRecruitmentSuite = () => {
   const [mode, setMode] = useState('home');
