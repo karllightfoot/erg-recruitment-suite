@@ -1,51 +1,80 @@
-// ✅ UPDATED: call Vercel serverless function instead of Anthropic directly
-const callAPI = async (
-  prompt,
-  isDocument = false,
-  documentData = null,
-  mediaType = null
-) => {
-  // Build Claude "messages" array
-  const messages = [];
-
-  if (isDocument && documentData && mediaType) {
-    // Document + prompt
-    messages.push({
-      role: "user",
-      content: [
-        {
-          type: "document",
-          source: {
-            type: "base64",
-            media_type: mediaType,
-            data: documentData,
-          },
-        },
-        {
-          type: "text",
-          text: prompt,
-        },
-      ],
-    });
-  } else {
-    // Plain text prompt
-    messages.push({
-      role: "user",
-      content: prompt,
-    });
+// Vercel Serverless Function: /api/claude
+export default async function handler(req, res) {
+  // Only allow POST
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method Not Allowed" });
   }
 
-  // Call Vercel serverless function
-  const res = await fetch("/api/claude", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
-  });
+  try {
+    // ---- Safely read JSON body (works even if req.body is undefined) ----
+    let messages;
 
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error("Claude API error:", errText);
-    throw new Error("Claude API request failed");
+    // If Vercel already parsed JSON:
+    if (req.body && typeof req.body === "object") {
+      ({ messages } = req.body);
+    } else {
+      // Fallback: manually read and parse the raw request body
+      const rawBody = await new Promise((resolve, reject) => {
+        let data = "";
+        req.on("data", (chunk) => {
+          data += chunk;
+        });
+        req.on("end", () => resolve(data));
+        req.on("error", reject);
+      });
+
+      const parsed = rawBody ? JSON.parse(rawBody) : {};
+      messages = parsed.messages;
+    }
+
+    if (!messages) {
+      return res.status(400).json({ error: "Missing 'messages' in request body" });
+    }
+
+    // ---- Call Anthropic API ----
+    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-3.5-sonnet-latest",
+        max_tokens: 4096,
+        messages,
+      }),
+    });
+
+    const data = await anthropicRes.json();
+
+    if (!anthropicRes.ok) {
+      console.error("Anthropic API error:", data);
+      return res.status(500).json({
+        error: "Anthropic API error",
+        details: data,
+      });
+    }
+
+    // ---- Normalise Claude response to a simple text string ----
+    let text = "";
+
+    if (typeof data.content === "string") {
+      text = data.content;
+    } else if (Array.isArray(data.content)) {
+      text = data.content.map((part) => part.text || "").join("\n");
+    } else if (typeof data.text === "string") {
+      text = data.text;
+    } else {
+      text = JSON.stringify(data);
+    }
+
+    return res.status(200).json({ text });
+  } catch (err) {
+    console.error("Serverless function error:", err);
+    return res.status(500).json({
+      error: "Serverless function crashed",
+      details: err.message,
+    });
   }
-
-  const data = await res.json();
+}
