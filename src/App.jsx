@@ -98,38 +98,36 @@ const ERGRecruitmentSuite = () => {
 
   // ✅ UPDATED: call Netlify serverless function instead of Anthropic directly
   const callAPI = async (prompt, isDocument = false, documentData = null, mediaType = null) => {
-    const body = {
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 8000,
-      messages: []
-    };
+  try {
+    const res = await fetch("/api/claude", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt,
+        isDocument,
+        documentData,
+        mediaType
+      }),
+    });
 
-    if (isDocument && documentData && mediaType) {
-      // For document uploads (PDF, Word, etc), use document block
-      body.messages.push({
-        role: "user",
-        content: [
-          {
-            type: "document",
-            source: {
-              type: "base64",
-              media_type: mediaType,
-              data: documentData
-            }
-          },
-          {
-            type: "text",
-            text: prompt
-          }
-        ]
-      });
-    } else {
-      // For regular text prompts
-      body.messages.push({
-        role: "user",
-        content: prompt
-      });
+    if (!res.ok) {
+      throw new Error(`Claude API request failed: ${res.status}`);
     }
+
+    const data = await res.json();
+
+    if (!data || typeof data.text !== "string") {
+      throw new Error("Unexpected response format from Claude function");
+    }
+
+    return data.text;
+  } catch (err) {
+    console.error("callAPI error:", err);
+    return "Error: Failed to generate response. Check server logs.";
+  }
+};
 
     const res = await fetch("/.netlify/functions/claude", {
       method: "POST",
