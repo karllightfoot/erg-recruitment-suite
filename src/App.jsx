@@ -96,66 +96,65 @@ const ERGRecruitmentSuite = () => {
     }
   }, []);
 
-  // ✅ UPDATED: call Netlify serverless function instead of Anthropic directly
-  const callAPI = async (prompt, isDocument = false, documentData = null, mediaType = null) => {
-  try {
-    const res = await fetch("/api/claude", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        prompt,
-        isDocument,
-        documentData,
-        mediaType
-      }),
+ // ✅ UPDATED: call Vercel serverless function instead of Anthropic directly
+const callAPI = async (prompt, isDocument = false, documentData = null, mediaType = null) => {
+  // Build Claude "messages" array
+  const messages = [];
+
+  if (isDocument && documentData && mediaType) {
+    // Document + prompt
+    messages.push({
+      role: "user",
+      content: [
+        {
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: mediaType,
+            data: documentData,
+          },
+        },
+        {
+          type: "text",
+          text: prompt,
+        },
+      ],
     });
-
-    if (!res.ok) {
-      throw new Error(`Claude API request failed: ${res.status}`);
-    }
-
-    const data = await res.json();
-
-    if (!data || typeof data.text !== "string") {
-      throw new Error("Unexpected response format from Claude function");
-    }
-
-    return data.text;
-  } catch (err) {
-    console.error("callAPI error:", err);
-    return "Error: Failed to generate response. Check server logs.";
+  } else {
+    // Plain text prompt
+    messages.push({
+      role: "user",
+      content: prompt,
+    });
   }
+
+  // Call Vercel serverless function
+  const res = await fetch("/api/claude", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
+  });
+
+  if (!res.ok) {
+    console.error("Claude API error:", await res.text());
+    throw new Error("Claude API request failed");
+  }
+
+  const data = await res.json();
+
+  // Try to be tolerant of different response shapes
+  let text;
+  if (typeof data.text === "string") {
+    text = data.text;
+  } else if (Array.isArray(data.content)) {
+    text = data.content.map(part => part.text || "").join("\n");
+  } else {
+    text = JSON.stringify(data);
+  }
+
+  return text;
 };
 
-    const res = await fetch("/.netlify/functions/claude", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-
-    let data;
-    try {
-      data = await res.json();
-    } catch (err) {
-      throw new Error(`Bad response from server (status ${res.status})`);
-    }
-
-    if (!res.ok) {
-      const message =
-        data?.error?.message ||
-        data?.error ||
-        `API request failed: ${res.status}`;
-      throw new Error(message);
-    }
-
-    if (!data.content || !Array.isArray(data.content) || !data.content[0]?.text) {
-      throw new Error("Unexpected API response format");
-    }
-
-    return data.content[0].text;
-  };
 
   const createProject = () => {
     if (!newProjectName.trim()) return;
