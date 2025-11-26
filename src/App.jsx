@@ -96,7 +96,7 @@ const ERGRecruitmentSuite = () => {
     }
   }, []);
 
- // ✅ UPDATED: call Vercel serverless function instead of Anthropic directly
+ // ✅ UPDATED: call Vercel serverless function instead of Anthropic directly 
 const callAPI = async (prompt, isDocument = false, documentData = null, mediaType = null) => {
   // Build Claude "messages" array
   const messages = [];
