@@ -96,21 +96,7 @@ const ERGRecruitmentSuite = () => {
     }
   }, []);
 
-  const createProject = () => {
-    if (!newProjectName.trim()) return;
-    const newP = {
-      id: Date.now().toString(),
-      name: newProjectName,
-      createdAt: Date.now(),
-      content: {}
-    };
-    setProjects([...projects, newP]);
-    setCurrentProjectId(newP.id);
-    setNewProjectName('');
-    setShowModal(false);
-    setMode('project');
-  };
-
+  // ✅ UPDATED: call Netlify serverless function instead of Anthropic directly
   const callAPI = async (prompt, isDocument = false, documentData = null, mediaType = null) => {
     const body = {
       model: "claude-sonnet-4-20250514",
@@ -145,18 +131,47 @@ const ERGRecruitmentSuite = () => {
       });
     }
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("/.netlify/functions/claude", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
-    
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `API request failed: ${res.status}`);
+
+    let data;
+    try {
+      data = await res.json();
+    } catch (err) {
+      throw new Error(`Bad response from server (status ${res.status})`);
     }
-    const data = await res.json();
+
+    if (!res.ok) {
+      const message =
+        data?.error?.message ||
+        data?.error ||
+        `API request failed: ${res.status}`;
+      throw new Error(message);
+    }
+
+    if (!data.content || !Array.isArray(data.content) || !data.content[0]?.text) {
+      throw new Error("Unexpected API response format");
+    }
+
     return data.content[0].text;
+  };
+
+  const createProject = () => {
+    if (!newProjectName.trim()) return;
+    const newP = {
+      id: Date.now().toString(),
+      name: newProjectName,
+      createdAt: Date.now(),
+      content: {}
+    };
+    setProjects([...projects, newP]);
+    setCurrentProjectId(newP.id);
+    setNewProjectName('');
+    setShowModal(false);
+    setMode('project');
   };
 
   const handleFileUpload = (e, setter) => {
