@@ -161,8 +161,6 @@ const callAPI = async (
   return text;
 };
 
-
-
   const createProject = () => {
     if (!newProjectName.trim()) return;
     const newP = {
