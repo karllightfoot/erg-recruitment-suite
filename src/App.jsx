@@ -87,35 +87,6 @@ const ERGRecruitmentSuite = () => {
     }
   }, [currentProjectId, projects]);
 
-  // Auto-save current content to project when inputs change (but NOT during generation)
-  useEffect(() => {
-    if (currentProjectId && projects.length > 0 && !loading) {
-      const currentProject = projects.find(p => p.id === currentProjectId);
-      // Only update if content has actually changed
-      const newContent = {
-        clientWebsite,
-        jobBriefing,
-        jobDescFile,
-        linkedinAd,
-        candidateBrief,
-        evp,
-        pitch,
-        emailBullets
-      };
-      
-      const hasChanged = JSON.stringify(currentProject?.content) !== JSON.stringify(newContent);
-      
-      if (hasChanged) {
-        setProjects(prevProjects => prevProjects.map(p => 
-          p.id === currentProjectId ? {
-            ...p,
-            content: newContent
-          } : p
-        ));
-      }
-    }
-  }, [currentProjectId, clientWebsite, jobBriefing, jobDescFile, linkedinAd, candidateBrief, evp, pitch, emailBullets, loading]);
-
   // Export all data to JSON file
   const exportAllData = () => {
     const data = {
@@ -683,6 +654,28 @@ Create a summary assessment that includes:
     }
   };
 
+  const handleTabSwitch = (tabId) => {
+    // Save current content before switching tabs
+    if (currentProjectId) {
+      setProjects(projects.map(p => 
+        p.id === currentProjectId ? {
+          ...p,
+          content: {
+            clientWebsite,
+            jobBriefing,
+            jobDescFile,
+            linkedinAd,
+            candidateBrief,
+            evp,
+            pitch,
+            emailBullets
+          }
+        } : p
+      ));
+    }
+    setActiveTab(tabId);
+  };
+
   const copy = (text) => {
     navigator.clipboard.writeText(text);
     showToast('Copied', 'success');
@@ -966,7 +959,7 @@ Keep it concise but comprehensive - they should feel prepared but not overwhelme
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabSwitch(tab.id)}
                 className={`flex-1 py-4 px-6 font-medium ${activeTab === tab.id ? `border-b-2 border-${tab.color}-600 text-${tab.color}-600` : 'text-gray-600'}`}
               >
                 <tab.icon className="w-5 h-5 inline mr-2" />
