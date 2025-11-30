@@ -156,7 +156,8 @@ const callAPI = async (
   prompt,
   isDocument = false,
   documentData = null,
-  mediaType = null
+  mediaType = null,
+  retries = 3
 ) => {
   // Build Claude "messages" array
   const messages = [];
@@ -188,32 +189,58 @@ const callAPI = async (
     });
   }
 
-  // Call Vercel serverless function
-  const res = await fetch("/api/claude", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
-  });
+  // Retry loop
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`API call attempt ${attempt}/${retries}`);
+      
+      // Call Vercel serverless function with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error("Claude API error:", errText);
-    throw new Error("Claude API request failed");
+      const res = await fetch("/api/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Claude API error:", errText);
+        throw new Error(`API request failed: ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      // Try to be tolerant of different response shapes
+      let text;
+      if (typeof data.text === "string") {
+        text = data.text;
+      } else if (Array.isArray(data.content)) {
+        text = data.content.map((part) => part.text || "").join("\n");
+      } else {
+        text = JSON.stringify(data);
+      }
+
+      console.log(`API call attempt ${attempt} succeeded`);
+      return text;
+    } catch (error) {
+      console.error(`API call attempt ${attempt} failed:`, error);
+      
+      // If this was the last attempt, throw the error
+      if (attempt === retries) {
+        throw new Error(`API call failed after ${retries} attempts: ${error.message}`);
+      }
+      
+      // Wait before retrying (exponential backoff: 1s, 2s, 4s)
+      const waitTime = Math.pow(2, attempt - 1) * 1000;
+      console.log(`Waiting ${waitTime}ms before retry...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
   }
-
-  const data = await res.json();
-
-  // Try to be tolerant of different response shapes
-  let text;
-  if (typeof data.text === "string") {
-    text = data.text;
-  } else if (Array.isArray(data.content)) {
-    text = data.content.map((part) => part.text || "").join("\n");
-  } else {
-    text = JSON.stringify(data);
-  }
-
-  return text;
 };
 
   const createProject = () => {
@@ -271,6 +298,9 @@ const callAPI = async (
     }
     
     setLoading(true);
+    let completedCount = 0;
+    const totalSteps = 5;
+    
     try {
       const assets = `
 CLIENT WEBSITE: ${clientWebsite || 'Not provided'}
@@ -278,6 +308,7 @@ JOB BRIEFING: ${jobBriefing || 'Not provided'}
 JOB DESCRIPTION: ${jobDescFile?.content || 'Not provided'}`;
 
       // LinkedIn Ad
+      showToast(`Generating LinkedIn Ad (1/${totalSteps})...`, 'info');
       const linkedinPrompt = `Create THE BEST LinkedIn job ad:
 ${assets}
 
@@ -291,8 +322,10 @@ Keep the company anonymous - refer to them as "our client", "the team", "this or
       
       const adResult = await callAPI(linkedinPrompt);
       setLinkedinAd(adResult);
+      completedCount++;
 
       // Candidate Brief
+      showToast(`Generating Candidate Brief (2/${totalSteps})...`, 'info');
       const briefPrompt = `Create ${briefLength}-word candidate brief:
 ${assets}
 TONE: ${briefTone === 1 ? 'Formal' : briefTone === 2 ? 'Professional' : 'Conversational'}
@@ -300,8 +333,10 @@ Cover: company, role, tech, team, growth, why it matters. Short paras, UK Englis
       
       const briefResult = await callAPI(briefPrompt);
       setCandidateBrief(briefResult);
+      completedCount++;
 
       // EVP
+      showToast(`Generating EVP (3/${totalSteps})...`, 'info');
       const evpPrompt = `Employee Value Proposition (9 sections):
 ${assets}
 LENGTH: ${evpLength === 1 ? 'Brief' : evpLength === 2 ? 'Standard' : 'Detailed'}
@@ -309,8 +344,10 @@ Sections: Tech Usage, Training, Career, Culture, Benefits, Challenges, Flexibili
       
       const evpResult = await callAPI(evpPrompt);
       setEvp(evpResult);
+      completedCount++;
 
       // Elevator Pitch
+      showToast(`Generating Pitch (4/${totalSteps})...`, 'info');
       const pitchPrompt = `60-second phone script:
 ${assets}
 TONE: ${pitchTone === 1 ? 'Formal' : pitchTone === 2 ? 'Professional' : 'Casual'}
@@ -318,8 +355,10 @@ Natural conversation, UK English.`;
       
       const pitchResult = await callAPI(pitchPrompt);
       setPitch(pitchResult);
+      completedCount++;
 
       // Email Bullets
+      showToast(`Generating Email (5/${totalSteps})...`, 'info');
       const emailPrompt = `8 email bullets for candidate:
 ${assets}
 TONE: ${emailTone === 1 ? 'Professional' : emailTone === 2 ? 'Friendly' : 'Casual'}
@@ -327,6 +366,7 @@ NO company name, informal, one long sentence each (15-25 words)`;
       
       const emailResult = await callAPI(emailPrompt);
       setEmailBullets(emailResult);
+      completedCount++;
 
       if (currentProjectId) {
         setProjects(projects.map(p => 
@@ -341,9 +381,10 @@ NO company name, informal, one long sentence each (15-25 words)`;
         ));
       }
 
-      showToast('All content generated', 'success');
+      showToast('All content generated successfully!', 'success');
     } catch (e) {
-      showToast('Generation failed: ' + e.message, 'error');
+      console.error('Generation error:', e);
+      showToast(`Generation failed at step ${completedCount + 1}/${totalSteps}: ${e.message}`, 'error');
     } finally {
       setLoading(false);
     }
