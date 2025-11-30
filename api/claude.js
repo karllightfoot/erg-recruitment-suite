@@ -1,15 +1,31 @@
 export default async function handler(req, res) {
   try {
-    // 🔥 Parse JSON body manually (Vercel does NOT do this automatically)
-    const { messages } = typeof req.body === "string"
-      ? JSON.parse(req.body || "{}")
-      : req.body || {};
-
-    if (!messages) {
-      return res.status(400).json({ error: "No messages provided" });
+    // Read raw body (Vercel Node request doesn't parse JSON by default)
+    let rawBody = "";
+    for await (const chunk of req) {
+      rawBody += chunk;
     }
 
-    // 🔥 Call Anthropic API
+    let body = {};
+    if (rawBody) {
+      try {
+        body = JSON.parse(rawBody);
+      } catch (e) {
+        console.error("Failed to parse JSON body:", rawBody);
+        return res.status(400).json({
+          error: "Invalid JSON body",
+        });
+      }
+    }
+
+    const { messages } = body;
+
+    if (!Array.isArray(messages)) {
+      return res.status(400).json({
+        error: "Invalid request: 'messages' must be an array",
+      });
+    }
+
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -19,7 +35,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-3-5-sonnet-latest",
-        max_tokens: 4096,
+        max_tokens: 8000,
         messages,
       }),
     });
@@ -27,16 +43,30 @@ export default async function handler(req, res) {
     const data = await anthropicRes.json();
 
     if (!anthropicRes.ok) {
-      return res.status(500).json({ error: data });
+      console.error("Anthropic API error:", data);
+      return res.status(500).json({
+        error: "Anthropic API error",
+        details: data,
+      });
     }
 
-    return res.status(200).json(data);
+    let text = "";
+    if (typeof data.content === "string") {
+      text = data.content;
+    } else if (Array.isArray(data.content)) {
+      text = data.content.map((part) => part.text || "").join("\n");
+    } else if (typeof data.output_text === "string") {
+      text = data.output_text;
+    } else {
+      text = JSON.stringify(data);
+    }
 
+    return res.status(200).json({ text });
   } catch (err) {
-    console.error("Serverless function crashed:", err);
+    console.error("Serverless function error:", err);
     return res.status(500).json({
       error: "Serverless function crashed",
-      details: err.message
+      details: err.message,
     });
   }
 }
