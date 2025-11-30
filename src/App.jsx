@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Loader2, CheckCircle, AlertCircle, X, Target, Copy, FolderOpen, Briefcase, Trash2, Upload, Phone, Mail } from 'lucide-react';
+import { FileText, Loader2, CheckCircle, AlertCircle, X, Target, Copy, FolderOpen, Briefcase, Trash2, Upload, Phone, Mail, Download, UploadCloud } from 'lucide-react';
 
 const ERGRecruitmentSuite = () => {
   const [mode, setMode] = useState('home');
@@ -87,14 +87,48 @@ const ERGRecruitmentSuite = () => {
     }
   }, [currentProjectId, projects]);
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('erg-projects');
-      if (saved) setProjects(JSON.parse(saved));
-    } catch (e) {
-      console.error('Failed to load projects:', e);
-    }
-  }, []);
+  // Export all data to JSON file
+  const exportAllData = () => {
+    const data = {
+      projects: projects,
+      exportDate: new Date().toISOString(),
+      version: '1.0'
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `erg-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Data exported successfully', 'success');
+  };
+
+  // Import data from JSON file
+  const importData = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (data.projects && Array.isArray(data.projects)) {
+          setProjects(data.projects);
+          localStorage.setItem('erg-projects', JSON.stringify(data.projects));
+          showToast(`Imported ${data.projects.length} projects successfully`, 'success');
+        } else {
+          showToast('Invalid backup file format', 'error');
+        }
+      } catch (error) {
+        showToast('Error importing data: ' + error.message, 'error');
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = ''; // Reset input
+  };
 
 // ✅ UPDATED: call Vercel serverless function instead of Anthropic directly
 const callAPI = async (
@@ -747,6 +781,27 @@ Keep it concise but comprehensive - they should feel prepared but not overwhelme
             <Briefcase className="w-16 h-16 text-blue-600 mx-auto mb-4" />
             <h1 className="text-4xl font-bold mb-2">ERG Recruitment Suite</h1>
             <p className="text-gray-600">Birmingham IT Recruitment Tools</p>
+          </div>
+
+          {/* Export/Import Buttons */}
+          <div className="flex gap-4 mb-8 max-w-md mx-auto">
+            <button
+              onClick={exportAllData}
+              className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+            >
+              <Download className="w-5 h-5" />
+              Export All Data
+            </button>
+            <label className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 cursor-pointer">
+              <UploadCloud className="w-5 h-5" />
+              Import Data
+              <input
+                type="file"
+                accept=".json"
+                onChange={importData}
+                className="hidden"
+              />
+            </label>
           </div>
 
           <button
