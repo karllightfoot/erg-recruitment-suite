@@ -309,6 +309,9 @@ const callAPI = async (
     let completedCount = 0;
     const totalSteps = 5;
     
+    // Helper function to add delay between calls
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    
     try {
       const assets = `
 CLIENT WEBSITE: ${clientWebsite || 'Not provided'}
@@ -331,6 +334,7 @@ Keep the company anonymous - refer to them as "our client", "the team", "this or
       const adResult = await callAPI(linkedinPrompt);
       setLinkedinAd(adResult);
       completedCount++;
+      await delay(2000); // 2 second delay
 
       // Candidate Brief
       showToast(`Generating Candidate Brief (2/${totalSteps})...`, 'info');
@@ -342,6 +346,7 @@ Cover: company, role, tech, team, growth, why it matters. Short paras, UK Englis
       const briefResult = await callAPI(briefPrompt);
       setCandidateBrief(briefResult);
       completedCount++;
+      await delay(2000); // 2 second delay
 
       // EVP
       showToast(`Generating EVP (3/${totalSteps})...`, 'info');
@@ -353,6 +358,7 @@ Sections: Tech Usage, Training, Career, Culture, Benefits, Challenges, Flexibili
       const evpResult = await callAPI(evpPrompt);
       setEvp(evpResult);
       completedCount++;
+      await delay(2000); // 2 second delay
 
       // Elevator Pitch
       showToast(`Generating Pitch (4/${totalSteps})...`, 'info');
@@ -364,6 +370,7 @@ Natural conversation, UK English.`;
       const pitchResult = await callAPI(pitchPrompt);
       setPitch(pitchResult);
       completedCount++;
+      await delay(2000); // 2 second delay
 
       // Email Bullets
       showToast(`Generating Email (5/${totalSteps})...`, 'info');
