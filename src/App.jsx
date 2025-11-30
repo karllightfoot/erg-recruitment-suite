@@ -87,9 +87,9 @@ const ERGRecruitmentSuite = () => {
     }
   }, [currentProjectId, projects]);
 
-  // Auto-save current content to project when inputs change
+  // Auto-save current content to project when inputs change (but NOT during generation)
   useEffect(() => {
-    if (currentProjectId && projects.length > 0) {
+    if (currentProjectId && projects.length > 0 && !loading) {
       const currentProject = projects.find(p => p.id === currentProjectId);
       // Only update if content has actually changed
       const newContent = {
@@ -114,7 +114,7 @@ const ERGRecruitmentSuite = () => {
         ));
       }
     }
-  }, [currentProjectId, clientWebsite, jobBriefing, jobDescFile, linkedinAd, candidateBrief, evp, pitch, emailBullets]);
+  }, [currentProjectId, clientWebsite, jobBriefing, jobDescFile, linkedinAd, candidateBrief, evp, pitch, emailBullets, loading]);
 
   // Export all data to JSON file
   const exportAllData = () => {
