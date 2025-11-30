@@ -89,24 +89,32 @@ const ERGRecruitmentSuite = () => {
 
   // Auto-save current content to project when inputs change
   useEffect(() => {
-    if (currentProjectId) {
-      setProjects(projects.map(p => 
-        p.id === currentProjectId ? {
-          ...p,
-          content: {
-            clientWebsite,
-            jobBriefing,
-            jobDescFile,
-            linkedinAd,
-            candidateBrief,
-            evp,
-            pitch,
-            emailBullets
-          }
-        } : p
-      ));
+    if (currentProjectId && projects.length > 0) {
+      const currentProject = projects.find(p => p.id === currentProjectId);
+      // Only update if content has actually changed
+      const newContent = {
+        clientWebsite,
+        jobBriefing,
+        jobDescFile,
+        linkedinAd,
+        candidateBrief,
+        evp,
+        pitch,
+        emailBullets
+      };
+      
+      const hasChanged = JSON.stringify(currentProject?.content) !== JSON.stringify(newContent);
+      
+      if (hasChanged) {
+        setProjects(prevProjects => prevProjects.map(p => 
+          p.id === currentProjectId ? {
+            ...p,
+            content: newContent
+          } : p
+        ));
+      }
     }
-  }, [clientWebsite, jobBriefing, jobDescFile, linkedinAd, candidateBrief, evp, pitch, emailBullets]);
+  }, [currentProjectId, clientWebsite, jobBriefing, jobDescFile, linkedinAd, candidateBrief, evp, pitch, emailBullets]);
 
   // Export all data to JSON file
   const exportAllData = () => {
