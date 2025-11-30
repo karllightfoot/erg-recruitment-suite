@@ -67,15 +67,15 @@ const ERGRecruitmentSuite = () => {
   useEffect(() => {
     if (currentProjectId) {
       const p = projects.find(x => x.id === currentProjectId);
-      if (p?.content) {
-        setClientWebsite(p.content.clientWebsite || '');
-        setJobBriefing(p.content.jobBriefing || '');
-        setJobDescFile(p.content.jobDescFile || null);
-        setLinkedinAd(p.content.linkedinAd || null);
-        setCandidateBrief(p.content.candidateBrief || null);
-        setEvp(p.content.evp || null);
-        setPitch(p.content.pitch || null);
-        setEmailBullets(p.content.emailBullets || null);
+      if (p) {
+        setClientWebsite(p.content?.clientWebsite || '');
+        setJobBriefing(p.content?.jobBriefing || '');
+        setJobDescFile(p.content?.jobDescFile || null);
+        setLinkedinAd(p.content?.linkedinAd || null);
+        setCandidateBrief(p.content?.candidateBrief || null);
+        setEvp(p.content?.evp || null);
+        setPitch(p.content?.pitch || null);
+        setEmailBullets(p.content?.emailBullets || null);
         setCvResult(p.cvResult || null);
         setInterviewQs(p.interviewQs || null);
         setAnalyzedCandidates(p.analyzedCandidates || []);
@@ -86,6 +86,27 @@ const ERGRecruitmentSuite = () => {
       }
     }
   }, [currentProjectId, projects]);
+
+  // Auto-save current content to project when inputs change
+  useEffect(() => {
+    if (currentProjectId) {
+      setProjects(projects.map(p => 
+        p.id === currentProjectId ? {
+          ...p,
+          content: {
+            clientWebsite,
+            jobBriefing,
+            jobDescFile,
+            linkedinAd,
+            candidateBrief,
+            evp,
+            pitch,
+            emailBullets
+          }
+        } : p
+      ));
+    }
+  }, [clientWebsite, jobBriefing, jobDescFile, linkedinAd, candidateBrief, evp, pitch, emailBullets]);
 
   // Export all data to JSON file
   const exportAllData = () => {
@@ -385,16 +406,19 @@ Brief explanation of score (2-3 sentences)
 [List any technical skill gaps, missing requirements, or concerns about the candidate's fit for this specific role. Be direct and honest. If there are NO concerns, write "No significant technical concerns identified."]`;
 
       let result;
-      // Only PDFs can use document mode - Word docs need text extraction
+      // PDFs and Word docs can use document mode
       const isPDF = cvFile.type === 'application/pdf';
+      const isWordDoc = cvFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+                        cvFile.type === 'application/msword';
       
       console.log('File type:', cvFile.type);
       console.log('Is PDF?', isPDF);
+      console.log('Is Word?', isWordDoc);
       console.log('File content exists?', !!cvFile.content);
       console.log('File content length:', cvFile.content?.length);
 
-      if (isPDF) {
-        console.log('Processing as PDF document...');
+      if (isPDF || isWordDoc) {
+        console.log('Processing as document (PDF or Word)...');
         // Extract base64 data from data URL
         if (!cvFile.content || !cvFile.content.includes(',')) {
           console.log('ERROR: Invalid base64 format');
@@ -402,18 +426,15 @@ Brief explanation of score (2-3 sentences)
         }
         const base64Data = cvFile.content.split(',')[1];
         console.log('Base64 extracted, length:', base64Data?.length);
-        console.log('Calling API with PDF document...');
-        result = await callAPI(promptText, true, base64Data, 'application/pdf');
+        console.log('Calling API with document...');
+        result = await callAPI(promptText, true, base64Data, cvFile.type);
         console.log('API call complete');
       } else {
-        console.log('Processing as text file (Word/TXT)...');
-        // For Word docs and text files, extract text from content
+        console.log('Processing as text file...');
         let textContent = cvFile.content;
         
-        // If it's a Word doc that was read as text, use it directly
-        // If it's base64, we need to show error since we can't extract text from Word in browser
         if (cvFile.content.startsWith('data:')) {
-          throw new Error('Word documents (.docx) cannot be processed directly. Please convert to PDF or TXT first, or use the "Convert to Word" feature after uploading a PDF.');
+          throw new Error('Unable to process this file format. Please use PDF, Word (.docx), or TXT.');
         }
         
         const fullPrompt = `${promptText}
@@ -1048,14 +1069,14 @@ Keep it concise but comprehensive - they should feel prepared but not overwhelme
             )}
             
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">Upload CV (PDF or TXT only)</label>
+              <label className="block text-sm font-medium mb-2">Upload CV (PDF, Word, or TXT)</label>
               <input 
                 type="file" 
-                accept=".txt,.pdf" 
+                accept=".txt,.pdf,.doc,.docx" 
                 onChange={e => handleFileUpload(e, setCvFile)} 
                 className="w-full text-sm" 
               />
-              <p className="text-xs text-gray-500 mt-1">Note: Word documents (.docx) are not supported. Please convert to PDF first.</p>
+              <p className="text-xs text-gray-500 mt-1">Supports PDF, Word (.docx), and TXT files</p>
               {cvFile && <p className="text-xs text-gray-600 mt-2">File: {cvFile.fileName}</p>}
             </div>
             <button 
