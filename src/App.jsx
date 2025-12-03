@@ -270,111 +270,151 @@ const callAPI = async (
     }
   };
 
-  const generateAll = async () => {
+    const generateAll = async () => {
     if (!clientWebsite && !jobBriefing && !jobDescFile) {
       showToast('Add at least one input', 'error');
       return;
     }
-    
+
     setLoading(true);
-    let completedCount = 0;
-    const totalSteps = 5;
-    
-    // Helper function to add delay between calls
-    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-    
+    showToast('Generating full content pack...', 'info');
+
     try {
       const assets = `
 CLIENT WEBSITE: ${clientWebsite || 'Not provided'}
 JOB BRIEFING: ${jobBriefing || 'Not provided'}
 JOB DESCRIPTION: ${jobDescFile?.content || 'Not provided'}`;
 
-      // LinkedIn Ad
-      showToast(`Generating LinkedIn Ad (1/${totalSteps})...`, 'info');
-      const linkedinPrompt = `Create THE BEST LinkedIn job ad:
+      const linkedinToneLabel =
+        linkedinTone === 1 ? 'Formal' : linkedinTone === 2 ? 'Balanced' : 'Casual';
+      const briefToneLabel =
+        briefTone === 1 ? 'Formal' : briefTone === 2 ? 'Professional' : 'Conversational';
+      const evpLengthLabel =
+        evpLength === 1 ? 'Brief' : evpLength === 2 ? 'Standard' : 'Detailed';
+      const pitchToneLabel =
+        pitchTone === 1 ? 'Formal' : pitchTone === 2 ? 'Professional' : 'Casual';
+      const emailToneLabel =
+        emailTone === 1 ? 'Professional' : emailTone === 2 ? 'Friendly' : 'Casual';
+
+      const masterPrompt = `
+You are "ERG Recruitment Suite", a specialist recruitment copy engine for a tech recruiter in Birmingham.
+
+ASSETS
 ${assets}
 
-CRITICAL: DO NOT include the company name or sector. Keep it anonymous and generic.
+SLIDER SETTINGS
+- LinkedIn tone: ${linkedinToneLabel}
+- Candidate brief length: ~${briefLength} words
+- Candidate brief tone: ${briefToneLabel}
+- EVP length: ${evpLengthLabel}
+- Pitch tone: ${pitchToneLabel}
+- Email tone: ${emailToneLabel}
 
-RULES: Max 3 lines per para, strong hook first 2-3 lines, no clichés, UK English, emojis (3-4), hashtags (3-5)
-TONE: ${linkedinTone === 1 ? 'Formal' : linkedinTone === 2 ? 'Balanced' : 'Casual'}
-Include: Hook, What You'll Do, What You'll Bring, Why Great, Soft Close
+TASK
+Using ONLY the assets above, generate ALL of the following in one go:
 
-Keep the company anonymous - refer to them as "our client", "the team", "this organisation" etc.`;
-      
-      const adResult = await callAPI(linkedinPrompt);
+1) linkedin_ad
+   - A LinkedIn job advert.
+   - CRITICAL: DO NOT include the company name or sector. Keep it anonymous and generic.
+   - Max 3 lines per paragraph.
+   - Strong hook in the first 2–3 lines.
+   - UK English.
+   - Use 3–4 emojis and 3–5 relevant hashtags.
+   - Include sections: Hook, What You'll Do, What You'll Bring, Why It's Great, Soft Close.
+
+2) candidate_brief
+   - A ${briefLength}-word candidate brief.
+   - Tone: ${briefToneLabel}.
+   - Cover: company, role, tech, team, growth, why it matters.
+   - Short paragraphs, UK English.
+
+3) evp
+   - Employee Value Proposition in 9 sections:
+   - Tech Usage, Training, Career, Culture, Benefits, Challenges, Flexibility, Comms, Leadership.
+   - Length style: ${evpLengthLabel}.
+
+4) pitch
+   - A 60-second phone pitch script.
+   - Tone: ${pitchToneLabel}.
+   - Natural, conversational UK English.
+
+5) email_bullets
+   - 8 email bullets to pitch the role to a candidate.
+   - Tone: ${emailToneLabel}.
+   - NO company name.
+   - Informal, one long sentence each (15–25 words).
+
+OUTPUT FORMAT (IMPORTANT)
+Return a SINGLE JSON object with EXACTLY these keys:
+
+{
+  "linkedin_ad": "string",
+  "candidate_brief": "string",
+  "evp": "string",
+  "pitch": "string",
+  "email_bullets": "string"
+}
+
+Rules:
+- Respond with VALID JSON ONLY.
+- No markdown.
+- No backticks.
+- No explanation before or after the JSON.
+`;
+
+      // 🔁 Single Claude call for all outputs
+      const raw = await callAPI(masterPrompt, false);
+
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch (err) {
+        console.error('JSON parse error, raw response:', raw);
+        throw new Error('Claude returned non-JSON data. Please try again.');
+      }
+
+      const adResult = data.linkedin_ad || '';
+      const briefResult = data.candidate_brief || '';
+      const evpResult = data.evp || '';
+      const pitchResult = data.pitch || '';
+      const emailResult = data.email_bullets || '';
+
       setLinkedinAd(adResult);
-      completedCount++;
-      await delay(2000); // 2 second delay
-
-      // Candidate Brief
-      showToast(`Generating Candidate Brief (2/${totalSteps})...`, 'info');
-      const briefPrompt = `Create ${briefLength}-word candidate brief:
-${assets}
-TONE: ${briefTone === 1 ? 'Formal' : briefTone === 2 ? 'Professional' : 'Conversational'}
-Cover: company, role, tech, team, growth, why it matters. Short paras, UK English.`;
-      
-      const briefResult = await callAPI(briefPrompt);
       setCandidateBrief(briefResult);
-      completedCount++;
-      await delay(2000); // 2 second delay
-
-      // EVP
-      showToast(`Generating EVP (3/${totalSteps})...`, 'info');
-      const evpPrompt = `Employee Value Proposition (9 sections):
-${assets}
-LENGTH: ${evpLength === 1 ? 'Brief' : evpLength === 2 ? 'Standard' : 'Detailed'}
-Sections: Tech Usage, Training, Career, Culture, Benefits, Challenges, Flexibility, Comms, Leadership`;
-      
-      const evpResult = await callAPI(evpPrompt);
       setEvp(evpResult);
-      completedCount++;
-      await delay(2000); // 2 second delay
-
-      // Elevator Pitch
-      showToast(`Generating Pitch (4/${totalSteps})...`, 'info');
-      const pitchPrompt = `60-second phone script:
-${assets}
-TONE: ${pitchTone === 1 ? 'Formal' : pitchTone === 2 ? 'Professional' : 'Casual'}
-Natural conversation, UK English.`;
-      
-      const pitchResult = await callAPI(pitchPrompt);
       setPitch(pitchResult);
-      completedCount++;
-      await delay(2000); // 2 second delay
-
-      // Email Bullets
-      showToast(`Generating Email (5/${totalSteps})...`, 'info');
-      const emailPrompt = `8 email bullets for candidate:
-${assets}
-TONE: ${emailTone === 1 ? 'Professional' : emailTone === 2 ? 'Friendly' : 'Casual'}
-NO company name, informal, one long sentence each (15-25 words)`;
-      
-      const emailResult = await callAPI(emailPrompt);
       setEmailBullets(emailResult);
-      completedCount++;
 
+      // Save back to current project
       if (currentProjectId) {
-        setProjects(projects.map(p => 
-          p.id === currentProjectId ? {
-            ...p,
-            content: {
-              clientWebsite, jobBriefing, jobDescFile,
-              linkedinAd: adResult, candidateBrief: briefResult,
-              evp: evpResult, pitch: pitchResult, emailBullets: emailResult
-            }
-          } : p
+        setProjects(projects.map(p =>
+          p.id === currentProjectId
+            ? {
+                ...p,
+                content: {
+                  clientWebsite,
+                  jobBriefing,
+                  jobDescFile,
+                  linkedinAd: adResult,
+                  candidateBrief: briefResult,
+                  evp: evpResult,
+                  pitch: pitchResult,
+                  emailBullets: emailResult
+                }
+              }
+            : p
         ));
       }
 
-      showToast('All content generated successfully!', 'success');
+      showToast('All content generated successfully (single API call)!', 'success');
     } catch (e) {
       console.error('Generation error:', e);
-      showToast(`Generation failed at step ${completedCount + 1}/${totalSteps}: ${e.message}`, 'error');
+      showToast(`Generation failed: ${e.message}`, 'error');
     } finally {
       setLoading(false);
     }
   };
+
 
   const analyzeCV = async () => {
     console.log('=== CV ANALYSIS START ===');
